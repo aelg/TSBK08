@@ -30,6 +30,10 @@ fi
 
 printf "%-35s%-30s%-20s\n" "File" "Compress and decompress" "Compression ratio"
 
+#For timing
+s1=$(date +%s)
+n1=$(date +%N)
+
 for dir in ${in_dirs[@]}
 do
   if [ ! -d "outfiles/$outdir/$dir" ]; then
@@ -59,3 +63,17 @@ do
   done
 done 
 
+s2=$(date +%s)
+n2=$(date +%N)
+n1="$(echo $n1 | sed 's/0*//')"
+n2="$(echo $n2 | sed 's/0*//')"
+let "t = $s2 - $s1"
+let "n = $n2 - $n1"
+if [ $n -lt 0 ]
+then
+  let "t = t - 1"
+  let "n = n + 1000000000"
+fi
+echo
+echo "Total time spent: $t.$n seconds"
+echo
