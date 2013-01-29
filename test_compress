@@ -1,0 +1,61 @@
+#!/bin/bash
+
+in_dirs=( cantrbry large )
+
+if [[ $# -lt 3 ]] 
+then
+  echo "Usage: $0 compressor decompressor directory"
+  echo "Compressor and decompressor are programs that takes infile as parameter and outputs to stdout"
+  echo "Directory is the directory for the compressed files in outfiles/"
+  exit 0
+fi
+
+compressor="$1"
+decompressor="$2"
+outdir="$3"
+
+tmpfile="tmp.tmp"
+
+error="\033[1;41m"
+success="\033[32m"
+normal="\033[0;1m"
+
+if [ ! -d "outfiles" ]; then
+  mkdir "outfiles"
+fi
+if [ ! -d "outfiles/$outdir" ]; then
+  mkdir "outfiles/$outdir"
+fi
+
+
+printf "%-35s%-30s%-20s\n" "File" "Compress and decompress" "Compression ratio"
+
+for dir in ${in_dirs[@]}
+do
+  if [ ! -d "outfiles/$outdir/$dir" ]; then
+    mkdir "outfiles/$outdir/$dir"
+  fi
+  for i in infiles/$dir/*
+  do
+    file=${i/*\/*\//}
+    infile="$i"
+    outfile="outfiles/$outdir/$dir/$file"
+    $compressor $infile > $outfile
+    $decompressor $outfile > $tmpfile
+    #echo "aa" >> $tmpfile
+    res=$(diff $infile $tmpfile)
+
+    if [ -z "$res" ]
+    then
+      result="SUCCESS"
+    else 
+      result="FAIL"
+    fi
+    rm $tmpfile
+    comp_size=$(stat -c%s "$outfile")
+    orig_size=$(stat -c%s "$infile")
+    ratio=$(echo "scale=3;$comp_size/$orig_size" | bc -l)
+    printf "%-35s%-30s%-20s\n" $infile $result $ratio
+  done
+done 
+
