@@ -16,10 +16,6 @@ outdir="$3"
 
 tmpfile="tmp.tmp"
 
-error="\0033[1;41m"
-success="\0033[32m"
-normal="\0033[0;1m"
-
 if [ ! -d "outfiles" ]; then
   mkdir "outfiles"
 fi
