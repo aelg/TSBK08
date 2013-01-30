@@ -21,7 +21,7 @@ typedef vector<State_map> Freq_vector;
 typedef vector<deque<unsigned char> > State_vector;
 typedef pair<int, vector<double> > Entropy_pair;
 
-unsigned int const max_size = 1000000; // ~700 MB apparently
+unsigned int const max_size = 3000000; // ~700 MB apparently
 
 Entropy_pair entropy(fstream &infile, int max_memory){
   int depth = max_memory+1;
@@ -29,8 +29,8 @@ Entropy_pair entropy(fstream &infile, int max_memory){
   Freq_vector freq(depth);
   State_vector state(depth);
   unsigned int length = 0;
-  while(1){
-  //while(length < 1000000){ // for testing with /dev/urandom.
+  //while(1){
+  while(length < 10000000){ // for testing with /dev/urandom.
     int c = infile.get();
     if(c == EOF) break;
     rep(i, 0, depth){
@@ -63,7 +63,7 @@ Entropy_pair entropy(fstream &infile, int max_memory){
       double p = (double)it->second/(length-i);
       if(it->second) H[i] += p * log2(p);
     }
-    H[i] = -H[i]/(i+1);
+    H[i] = -H[i];
   }
   return make_pair(length, H);
 }
@@ -84,9 +84,12 @@ int main(int argc, char *argv[]){
     
     Entropy_pair res = entropy(infile, memory);
     cout << "File: " << argv[i] << "\n Length: " << res.first << "\n";
-    cout << " " << left << setw(14) << "Memory (k-1)" << setw(23) << "Entropy H(X1,...,Xk)" << setw(15) << "Max compression\n";
+    cout << " " << left << setw(14) << "Memory (k)" << setw(24) << "Entropy H(Xn,...,Xn+k)"
+         << setw(30) << "Entropy H(Xn+k|Xn,...Xn+k-1)" << setw(15) << "Max compression\n";
     rep(j, 0, res.second.size()){
-      cout << " " << setw(14) << j << setw(23) << res.second[j] << setw(15) << res.second[j]/8 << "\n";
+      cout << " " << setw(14) << j << setw(24) << res.second[j] << setw(30) 
+           << (j>0?res.second[j] - res.second[j-1]:res.second[0]) << setw(15) 
+           << (j>0?res.second[j] - res.second[j-1]:res.second[0])/8 << "\n";
     }
     cout << '\n';
 

@@ -99,18 +99,22 @@ int main(int argc, char *argv[]){
     return 0;
   }
   fstream infile;
-  if(argv[1][0] == '-' && argv[1][1] == 'd')
+  fstream outfile;
+  if(argv[1][0] == '-' && argv[1][1] == 'd'){
     infile.open(argv[2], fstream::in | fstream::binary);
-  else
+    outfile.open(argv[3], fstream::out | fstream::binary);
+  }
+  else{
     infile.open(argv[1], fstream::in | fstream::binary);
-  //fstream outfile(argv[2], fstream::out | fstream::binary);
+    outfile.open(argv[2], fstream::out | fstream::binary);
+  }
 
   if(argv[1][0] == '-' && argv[1][1] == 'd')
-    decompress(infile, cout);
+    decompress(infile, outfile);
   else
-    compress(infile, cout);
+    compress(infile, outfile);
 
   infile.close();
-  //outfile.close();
+  outfile.close();
   return 0;
 }

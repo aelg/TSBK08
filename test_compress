@@ -5,7 +5,7 @@ in_dirs=( cantrbry large )
 if [[ $# -lt 3 ]] 
 then
   echo "Usage: $0 compressor decompressor directory"
-  echo "Compressor and decompressor are programs that takes infile as parameter and outputs to stdout"
+  echo "Compressor and decompressor are programs that takes infile and outfile as parameters"
   echo "Directory is the directory for the compressed files in outfiles/"
   exit 0
 fi
@@ -16,9 +16,9 @@ outdir="$3"
 
 tmpfile="tmp.tmp"
 
-error="\033[1;41m"
-success="\033[32m"
-normal="\033[0;1m"
+error="\0033[1;41m"
+success="\0033[32m"
+normal="\0033[0;1m"
 
 if [ ! -d "outfiles" ]; then
   mkdir "outfiles"
@@ -31,8 +31,7 @@ fi
 printf "%-35s%-30s%-20s\n" "File" "Compress and decompress" "Compression ratio"
 
 #For timing
-s1=$(date +%s)
-n1=$(date +%N)
+s1=$(date +%s.%N)
 
 for dir in ${in_dirs[@]}
 do
@@ -44,8 +43,8 @@ do
     file=${i/*\/*\//}
     infile="$i"
     outfile="outfiles/$outdir/$dir/$file"
-    $compressor $infile > $outfile
-    $decompressor $outfile > $tmpfile
+    $compressor $infile $outfile
+    $decompressor $outfile $tmpfile
     #echo "aa" >> $tmpfile
     res=$(diff $infile $tmpfile)
 
@@ -58,22 +57,13 @@ do
     rm $tmpfile
     comp_size=$(stat -c%s "$outfile")
     orig_size=$(stat -c%s "$infile")
-    ratio=$(echo "scale=3;$comp_size/$orig_size" | bc -l)
+    ratio=$(echo "scale=3;$comp_size/$orig_size" | bc)
     printf "%-35s%-30s%-20s\n" $infile $result $ratio
   done
 done 
 
-s2=$(date +%s)
-n2=$(date +%N)
-n1="$(echo $n1 | sed 's/0*//')"
-n2="$(echo $n2 | sed 's/0*//')"
-let "t = $s2 - $s1"
-let "n = $n2 - $n1"
-if [ $n -lt 0 ]
-then
-  let "t = t - 1"
-  let "n = n + 1000000000"
-fi
+s2=$(date +%s.%N)
+duration=$(echo "scale=2;($s2-$s1)/1" | bc)
 echo
-echo "Total time spent: $t.$n seconds"
+echo "Total time spent: $duration seconds"
 echo
