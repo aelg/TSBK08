@@ -24,7 +24,7 @@ if [ ! -d "outfiles/$outdir" ]; then
 fi
 
 
-printf "%-35s%-30s%-20s\n" "File" "Compress and decompress" "Compression ratio"
+printf "%-35s%-30s%-20s%-s\n" "File" "Compress and decompress" "Compression ratio" "Bits per symbol"
 
 #For timing
 s1=$(date +%s.%N)
@@ -54,7 +54,8 @@ do
     comp_size=$(stat -c%s "$outfile")
     orig_size=$(stat -c%s "$infile")
     ratio=$(echo "scale=3;$comp_size/$orig_size" | bc)
-    printf "%-35s%-30s%-20s\n" $infile $result $ratio
+    bps=$(echo "scale=2;$ratio*8/1" | bc)
+    printf "%-35s%-30s%-20s%-s\n" $infile $result $ratio $bps
   done
 done 
 

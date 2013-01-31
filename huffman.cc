@@ -2,6 +2,7 @@
 #include <iostream>
 #include <queue>
 #include <bitset>
+#include <set>
 
 #define rep(i, a, b) for(int i = (a); i < int(b); ++i)
 #define trav(it, v) for(typeof((v).begin()) it = (v).begin(); \
@@ -25,7 +26,9 @@ struct node{
   int weight, symbol;
   static int next_symbol;
   static node *symbol_to_node[alphabet_size];
+  static vector<int> weights; // Keeps tracks of weight to avoid searching the tree for weights that don't exist. Uses linear space.
   node(node* parent = 0, int number_of_symbols = alphabet_size):parent(parent), left(0), right(0), weight(number_of_symbols), symbol(NOSYMBOL){
+    ++weights[weight];
     if(number_of_symbols == 1){
       symbol = next_symbol++;
       symbol_to_node[symbol] = this;
@@ -55,6 +58,7 @@ struct node{
 };
 int node::next_symbol = 0;
 node *node::symbol_to_node[alphabet_size];
+vector<int> node::weights(alphabet_size+1);
 
 void switch_nodes(node *n1, node*n2){
   node *n1_parent = n1->parent, *n2_parent = n2->parent;
@@ -68,7 +72,16 @@ void switch_nodes(node *n1, node*n2){
 
 void update_tree(Tree tree, node *update_node){
   node *best_node = 0;
-  queue<node*> bfs_queue;
+
+  if(tree->weights[update_node->weight] < 2){
+    --tree->weights[update_node->weight];
+    ++update_node->weight;
+    if((unsigned int)update_node->weight >= tree->weights.size()) tree->weights.resize(tree->weights.size()*2);
+    ++tree->weights[update_node->weight];
+    if(update_node->parent) update_tree(tree, update_node->parent);
+    return;
+  }
+  --tree->weights[update_node->weight];
 
   if(update_node == tree){
     ++update_node->weight;
@@ -78,6 +91,7 @@ void update_tree(Tree tree, node *update_node){
   // Use a bfs to find a better place for the node.
   // This means the first node with the same weight as the node we're updating is
   // either the that node or a node higher up in the tree.
+  queue<node*> bfs_queue;
   bfs_queue.push(tree);
   while(!bfs_queue.empty()){
     node *cur_node = bfs_queue.front();
@@ -109,6 +123,7 @@ void update_tree(Tree tree, node *update_node){
   if(best_node != update_node) // Not necessary but probably avoids some operations.
     switch_nodes(best_node, update_node);
   ++update_node->weight;
+  ++tree->weights[update_node->weight];
   if(update_node->parent) update_tree(tree, update_node->parent);
 }
   
@@ -140,19 +155,15 @@ void compress(fstream &infile, fstream &outfile){
     if(!infile) break;
     Codeword codeword = get_codeword(huffman_tree, c);
     buffer = (buffer << codeword.second) | codeword.first;
-    //bitset<32> bb(codeword.second);
-    //cerr << bb << " " << codeword.second << endl;
     pos += codeword.second;
     while(pos > 7){
       outfile.put((buffer >> (pos-8)) & 0xff);
-      //cerr << ((buffer >> (pos-8)) & 0xff) << " " << pos << endl;
-      //buffer = buffer  8;
       pos = pos - 8;
     }
     update_tree(huffman_tree, huffman_tree->symbol_to_node[c]);
   }
   if(pos){
-    // One more symbol to code, find a codeword long enough to to not fit in the  last byte.
+    // One more symbol to code, find a codeword long enough to to NOT fit in the last byte.
     Codeword codeword;
     rep(i, 0, 256){
       codeword = get_codeword(huffman_tree, i);
@@ -160,7 +171,6 @@ void compress(fstream &infile, fstream &outfile){
     }
     outfile.put(((buffer<<(8-pos)) & 0xff) | (codeword.first>>(codeword.second-8+pos)));
   }
-  //print_tree(huffman_tree);
 }
 
 void decompress(fstream &infile, fstream &outfile){
