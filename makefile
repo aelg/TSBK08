@@ -12,7 +12,7 @@ base64 : base64.cc
 	g++ -Wall -Wextra -pedantic -O2 -o base64 base64.cc
 
 huffman : huffman.cc
-	g++ -Wall -Wextra -pedantic -g -O2 -o huffman huffman.cc
+	g++ -Wall -Wextra -pedantic -O2 -o huffman huffman.cc
 
 clean : 
 	rm entropy comp huffman base64

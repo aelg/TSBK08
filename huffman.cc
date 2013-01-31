@@ -70,28 +70,40 @@ void update_tree(Tree tree, node *update_node){
   node *best_node = 0;
   queue<node*> bfs_queue;
 
+  if(update_node == tree){
+    ++update_node->weight;
+    return;
+  }
+
   // Use a bfs to find a better place for the node.
   // This means the first node with the same weight as the node we're updating is
   // either the that node or a node higher up in the tree.
   bfs_queue.push(tree);
-  //int i = 0, pos = 1;
   while(!bfs_queue.empty()){
     node *cur_node = bfs_queue.front();
     bfs_queue.pop();
-    //if(i == pos) cerr << '\n', pos = pos << 1;
-    //++i;
-    //cerr << cur_node->symbol << ": " << cur_node->weight << " | ";
-    if(cur_node->weight == update_node->weight){
-      // A node with the same weight is found. This is either the starting node or a better node.
-      best_node = cur_node;
-      break; // This is the best node since bfs is used.
-    }
+    //if(cur_node->weight == update_node->weight){
+    //  // A node with the same weight is found. This is either the starting node or a better node.
+    //  best_node = cur_node;
+    //  break; // This is the best node since bfs is used.
+    //}
     // Push childs to queue.
     if(cur_node->left){
-      bfs_queue.push(cur_node->left);
+      if(cur_node->left->weight == update_node->weight){
+        best_node = cur_node->left;
+        break; // This is the best node since bfs is used.
+      }
+      if(cur_node->left->weight > update_node->weight)
+        bfs_queue.push(cur_node->left);
     }
     if(cur_node->right){
-      bfs_queue.push(cur_node->right);
+      if(cur_node->right->weight == update_node->weight){
+        best_node = cur_node->right;
+        break; // This is the best node since bfs is used.
+      }
+
+      if(cur_node->right->weight > update_node->weight)
+        bfs_queue.push(cur_node->right);
     }
   }
   if(best_node != update_node) // Not necessary but probably avoids some operations.
