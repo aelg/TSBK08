@@ -39,8 +39,14 @@ do
     file=${i/*\/*\//}
     infile="$i"
     outfile="outfiles/$outdir/$dir/$file"
-    $compressor $infile $outfile
-    $decompressor $outfile $tmpfile
+    if ! $compressor $infile $outfile
+    then 
+      exit 0
+    fi
+    if ! $decompressor $outfile $tmpfile
+    then
+      exit 0
+    fi
     #echo "aa" >> $tmpfile
     res=$(diff $infile $tmpfile)
 
