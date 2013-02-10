@@ -5,6 +5,9 @@
 #include <map>
 #include <inttypes.h>
 #include <cstdlib>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 #define rep(i, a, b) for(int i = (a); i < int(b); ++i)
 #define trav(it, v) for(typeof((v).begin()) it = (v).begin(); \
@@ -16,13 +19,15 @@ int const alphabet_size = 256;
 int const NOSYMBOL = (int)1e9;
 
 struct FenwickTree{
-  int n;
+  uint32_t n, internal_size;
   vector<int> s;
-  FenwickTree(int _n) : n(_n) {
-    s.assign(n, 0);
+  FenwickTree(uint32_t _n) : n(_n), internal_size(1) {
+    while(internal_size < n) internal_size <<= 1;
+    n = internal_size;
+    s.assign(internal_size, 0);
   }
   void update(int pos, int dif) {
-    for (; pos < n; pos |= pos + 1)
+    for (; (uint32_t)pos < n; pos |= pos + 1)
       s[pos] += dif;
   }
   int query(int val) {
@@ -31,18 +36,34 @@ struct FenwickTree{
       count += s[val];
     return count;
   }
+  int find(int val){
+    if(val == 0) return 0;
+    uint32_t pos = 0;
+    uint32_t bm = internal_size;
+    while(pos < internal_size && bm != 0){
+      uint32_t tpos = pos | (bm-1);
+      if(s[tpos] < val){
+        pos = tpos + 1;
+        val -= s[tpos];
+      }
+      bm >>= 1;
+    }
+    if(pos > n) return pos = n;
+    if(val == 0) return pos;
+    else return pos + 1;
+  }
 };
 
 
-typedef pair<int, int> Codeword; // first is codeword, second is codeword length.
-Codeword make_codeword(int first = 0, int second = 0){
+typedef pair<uint64_t, uint64_t> Codeword; // first is codeword, second is codeword length.
+Codeword make_codeword(uint64_t first = 0, uint64_t second = 0){
   return make_pair(first, second);
 }
 
 class Outfile{
   private:
     fstream &outfile;
-    int pos, buffer;
+    uint64_t pos, buffer;
   public:
     Outfile(fstream &outfile): outfile(outfile), pos(0), buffer(0){};
     void put_codeword(Codeword &codeword){
@@ -50,6 +71,8 @@ class Outfile{
       pos += codeword.second;
       while(pos > 7){
         outfile.put((buffer >> (pos-8)) & 0xff);
+        //cerr << "put: " << bitset<8>((buffer >> (pos-8)) & 0xff) << endl;
+        //buffer = buffer >> 8;
         pos = pos - 8;
       }
     }
@@ -61,7 +84,7 @@ class Frequency{
   public:
     Frequency(): tree(alphabet_size){
       rep(i, 0, alphabet_size){
-        tree.update(i, 1);
+        tree.update(i, 2);
       }
     }
     uint64_t get_total(){
@@ -71,79 +94,126 @@ class Frequency{
       if(symbol == 0) return tree.query(0);
       else return tree.query(symbol) - tree.query(symbol-1); // Can be made faster by writing a specialised function for the fenwick tree.
     }
-    uint64_t get_F(char symbol){
+    uint64_t get_F(int symbol){
       if(symbol == -1) return 0;
       return tree.query(symbol);
     }
     void update_symbol(uint64_t symbol){
       tree.update(symbol, 1);
     }
+    int get_symbol(uint64_t F){
+      return tree.find(F);
+    }
 };
 
 
 void compress(fstream &infile, fstream &outfile){
+  infile.seekg(0, fstream::end);
+  uint32_t size = infile.tellg();
+  infile.seekg(0, fstream::beg);
+  outfile.put(size>>24);
+  outfile.put(size>>16);
+  outfile.put(size>>8);
+  outfile.put(size);
   Outfile out(outfile);
+  //cerr << size << endl;
+
   Frequency F;
-  uint64_t l = 0, u = (uint32_t)-1;
-  int c = 0;
-  cerr << hex << u << endl;
+  uint32_t l = 0, u = (uint32_t)-1;
+  uint32_t c = 0;
+  //cerr << hex << u << dec << endl;
   while(1){
     uint64_t l_old = l, u_old = u, t;
-    c = infile.get();
     if(!infile) break;
+    c = infile.get();
     Codeword codeword = make_codeword();
-    l = l_old + (u_old - l_old + 1)*F.get_F(c-1)/F.get_total();
-    u = l_old + (u_old - l_old + 1)*F.get_F(c)/F.get_total() - 1;
+    l = l_old + ((u_old - l_old + 1)*F.get_F(c-1))/F.get_total();
+    u = l_old + ((u_old - l_old + 1)*F.get_F(c))/F.get_total() - 1;
     //cerr << "F(c-1): " << F.get_F(c-1) << " F(c): " << F.get_F(c) << endl;
+    //cerr << c << " : " << (char) c << endl;
     //cerr << "l: " << hex << l << " u: " << hex << u << endl;
+    //cerr << bitset<32>(l) << endl << bitset<32>(u) << endl;
     t = l ^ u;
-    for(int i = 1; !(t & uint64_t(1) << 63); ++i){
-      codeword.first = (codeword.first << 1) + (u >> 63);
+    for(int i = 1; !(t & uint64_t(1) << 31); ++i){
+      codeword.first = (codeword.first << 1) + (u >> 31);
       codeword.second = i;
       l = l << 1;
       u = u << 1;
+      ++u;
       t = t << 1;
     }
-    out.put_codeword(codeword);
+    if(codeword.second) out.put_codeword(codeword);
+  }
+  Codeword end = make_codeword(l, 32);
+  out.put_codeword(end);
+}
+
+void decompress(fstream &infile, fstream &outfile){
+  uint32_t size = 0;
+  size += infile.get() << 24;
+  size += infile.get() << 16;
+  size += infile.get() << 8;
+  size += infile.get();
+  //cerr << size << endl;
+
+  Frequency F;
+
+  uint64_t length = 0;
+  // Init.
+  uint32_t t = 0;
+  uint32_t l = 0, u = (uint32_t)-1;
+  rep(i, 0, 4){
+    int c = infile.get();
+    t <<= 8;
+    t += c;
+  }
+
+  uint32_t i = 0, c = infile.get();
+  while(1){
+    if (++length > size) return;
+    uint64_t f = ((t-l+1)*F.get_total()-1)/((uint64_t)u-l+1);
+
+    int symbol = F.get_symbol(f);
+    outfile.put(symbol);
+    //cerr << bitset<32>(t) << " : " << f << " : " << symbol << " : " << (char) symbol << endl;
+
+    uint64_t l_old = l, u_old = u;
+
+    l = l_old + ((u_old - l_old + 1)*F.get_F(symbol-1))/F.get_total();
+    u = l_old + ((u_old - l_old + 1)*F.get_F(symbol))/F.get_total() - 1;
+    //cerr << "F(c-1): " << F.get_F(symbol-1) << " F(c): " << F.get_F(symbol) << endl;
+    //cerr << bitset<32>(l) << endl << bitset<32>(u) << endl;
+
+    uint32_t tt = l^u;
+    while(!(tt & (uint64_t(1) << 31))){
+      tt = tt << 1;
+      u = u << 1;
+      ++u;
+      l = l << 1;
+      t = t << 1;
+      if((c >> (7-i)) & 1) t += 1;
+      ++i;
+      if(i > 7){
+        i = 0;
+        c = infile.get();
+        //if(c == EOF) c = 0;
+      }
+    }
   }
 }
 
-/*void decompress(fstream &infile, fstream &outfile){
-  TreeMap trees;
-  trees[0] = new Tree();
-//vector<Tree*> trees(alphabet_size*alphabet_size);
-//trav(it, trees){
-//  *it = new Tree();
-//}
-Node *cur = trees[0]->root;
-uint64_t c1 = 0, c2 = 0, c3 = 0, c4 = 0;
-while(1){
-//cerr << 0;
-int c = infile.get();
-//cerr << c;
-if(!infile) break;
-rep(i, 0, 8){
-//cerr << 1;
-if((c >> (7-i)) & 1) cur = cur->right;
-else cur = cur->left;
-if(cur->symbol != NOSYMBOL){
-//outfile.put(cur->symbol >> 8);
-int t = cur->symbol;
-outfile.put(t);
-//cerr << (char)t;
-update_tree(cur->tree->root, cur->tree->symbol_to_node[t]);
-cur = get_tree(trees, (c4 << 32) + (c3 << 24) + (c2 << 16) + (c1 << 8) + t);
-c4 = c3;
-c3 = c2;
-c2 = c1;
-c1 = t;
-//cerr << 2 << endl;
-}
-}
-}
-}*/
-
 int main(int argc, char *argv[]){
+
+  /*FenwickTree t(256);
+  rep(i, 0, 256){
+    t.update(i, 1);
+  }
+  rep(i, 0, 256){
+    cerr << i << " " << t.query(i) << endl;
+  }
+  return 0;*/
+
+
   if(argc < 2){
     cout << "Wrong input argument, use " << argv[0] << " [-d] infile.\n";
     return 0;
@@ -179,9 +249,9 @@ int main(int argc, char *argv[]){
       }
     }
   }
-  //if(will_decompress)
-  //  decompress(infile, outfile);
-  //else
+  if(will_decompress)
+    decompress(infile, outfile);
+  else
     compress(infile, outfile);
 
   infile.close();
