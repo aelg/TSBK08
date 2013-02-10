@@ -2,6 +2,9 @@
 #include <iostream>
 #include <queue>
 #include <bitset>
+#include <map>
+#include <inttypes.h>
+#include <cstdlib>
 
 #define rep(i, a, b) for(int i = (a); i < int(b); ++i)
 #define trav(it, v) for(typeof((v).begin()) it = (v).begin(); \
@@ -166,18 +169,57 @@ Codeword get_codeword(Node *root, int symbol){
   return codeword;
 }
 
-void compress(fstream &infile, fstream &outfile){
-  vector<Tree*> trees(alphabet_size*alphabet_size);
-  trav(it, trees){
-    *it = new Tree();
+int memory = 2;
+typedef map<uint64_t, Tree*> TreeMap;
+Node *get_tree(TreeMap &trees, uint64_t pos){
+  uint64_t mask;
+  switch(memory){
+    case 4:
+      mask = 0xffffffff; // Memory 4
+      break;
+    case 3:
+      mask = 0x00ffffff; // Memory 3
+      break;
+    case 2:
+      mask = 0x0000ffff; // Memory 2
+      break;
+    case 1:
+      mask = 0x000000ff; // Memory 1
+      break;
+    default:
+      cerr << "Illegal memory value" << endl;
+      mask = 0x0000ffff; // Memory 2
+      break;
   }
+  TreeMap::iterator it = trees.find(pos & mask);
+  Tree *tree;
+  if(it == trees.end()){
+    tree = new Tree();
+    trees[pos & mask] = tree;
+    return tree->root;
+  }
+  else{
+    return it->second->root;
+  }
+}
+
+void compress(fstream &infile, fstream &outfile){
+  TreeMap trees;
+  //trav(it, trees){
+  //  *it = new Tree();
+  //}
+  trees[0] = new Tree();
   Node *cur_tree = trees[0]->root;
   int buffer = 0, pos = 0;
-  int c1 = 0, c2 = 0, c = 0;
+  uint64_t c1 = 0, c2 = 0, c3 = 0, c4 = 0, c = 0;
   while(1){
+    c4 = c3;
+    c3 = c2;
     c2 = c1;
     c1 = c;
     c = infile.get();
+    //cc = infile.get();
+    //c += cc << 8;
     if(!infile) break;
     Codeword codeword = get_codeword(cur_tree, c);
     buffer = (buffer << codeword.second) | codeword.first;
@@ -187,7 +229,7 @@ void compress(fstream &infile, fstream &outfile){
       pos = pos - 8;
     }
     update_tree(cur_tree, cur_tree->tree->symbol_to_node[c]);
-    cur_tree = trees[(c1<<8) + c]->root;
+    cur_tree = get_tree(trees, (c4 << 32) + (c3 << 24) + (c2 << 16) + (c1<<8) + c);
   }
   if(pos){
     // One more symbol to code, find a codeword long enough to to NOT fit in the last byte.
@@ -201,12 +243,14 @@ void compress(fstream &infile, fstream &outfile){
 }
 
 void decompress(fstream &infile, fstream &outfile){
-  vector<Tree*> trees(alphabet_size*alphabet_size);
-  trav(it, trees){
-    *it = new Tree();
-  }
+  TreeMap trees;
+  trees[0] = new Tree();
+  //vector<Tree*> trees(alphabet_size*alphabet_size);
+  //trav(it, trees){
+  //  *it = new Tree();
+  //}
   Node *cur = trees[0]->root;
-  int c1 = 0, c2 = 0;
+  uint64_t c1 = 0, c2 = 0, c3 = 0, c4 = 0;
   while(1){
     //cerr << 0;
     int c = infile.get();
@@ -222,7 +266,10 @@ void decompress(fstream &infile, fstream &outfile){
         outfile.put(t);
         //cerr << (char)t;
         update_tree(cur->tree->root, cur->tree->symbol_to_node[t]);
-        cur = trees[(c1 << 8) + t]->root;
+        cur = get_tree(trees, (c4 << 32) + (c3 << 24) + (c2 << 16) + (c1 << 8) + t);
+        c4 = c3;
+        c3 = c2;
+        c2 = c1;
         c1 = t;
         //cerr << 2 << endl;
       }
@@ -237,34 +284,36 @@ int main(int argc, char *argv[]){
   }
   fstream infile;
   fstream outfile;
-  if(argv[1][0] == '-'){
-    if(argv[1][1] == 'd'){
-      infile.open(argv[2], fstream::in | fstream::binary);
-      if(!infile){
-        cerr << "Could not open file " << argv[2] << '\n';
+  bool infile_read = false, outfile_read = false, will_decompress = false;
+  rep(i, 1, argc){
+    if(argv[i][0] == '-'){
+      if(argv[i][1] == 'd'){
+        will_decompress = true;
       }
-      outfile.open(argv[3], fstream::out | fstream::binary);
-      if(!outfile){
-        cerr << "Could not open file " << argv[3] << '\n';
+      if(argv[i][1] == 'm'){
+        memory = atoi(argv[i+1]);
+        ++i;
       }
     }
     else{
-      cerr << "Unrecoginized parameter " << argv[1] << '\n';
-      return 0;
+      if(!infile_read){
+        infile.open(argv[i], fstream::in | fstream::binary);
+        if(!infile){
+          cerr << "Could not open file " << argv[i] << '\n';
+          return 1;
+        }
+        infile_read = true;
+      }
+      else if(!outfile_read){
+        outfile.open(argv[i], fstream::out | fstream::binary);
+        if(!outfile){
+          cerr << "Could not open file " << argv[3] << '\n';
+          return 1;
+        }
+      }
     }
   }
-  else{
-    infile.open(argv[1], fstream::in | fstream::binary);
-    if(!infile){
-      cerr << "Could not open file " << argv[1] << '\n';
-    }
-    outfile.open(argv[2], fstream::out | fstream::binary);
-    if(!outfile){
-      cerr << "Could not open file " << argv[2] << '\n';
-    }
-  }
-
-  if(argv[1][0] == '-' && argv[1][1] == 'd')
+  if(will_decompress)
     decompress(infile, outfile);
   else
     compress(infile, outfile);

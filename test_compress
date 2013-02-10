@@ -1,6 +1,7 @@
 #!/bin/bash
 
 in_dirs=( cantrbry large )
+#in_dirs=( large )
 
 if [[ $# -lt 3 ]] 
 then
