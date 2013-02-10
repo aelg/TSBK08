@@ -19,15 +19,16 @@ int const alphabet_size = 256;
 int const NOSYMBOL = (int)1e9;
 
 struct FenwickTree{
-  uint32_t n, internal_size;
-  vector<int> s;
-  FenwickTree(uint32_t _n) : n(_n), internal_size(1) {
-    while(internal_size < n) internal_size <<= 1;
-    n = internal_size;
-    s.assign(internal_size, 0);
+  uint32_t n, bitmask;
+  vector<uint32_t> s;
+  FenwickTree(uint32_t _n) : n(_n), bitmask(1) {
+    while(bitmask < n) bitmask <<= 1;
+    //n = bitmask;
+    //s.assign(bitmask, 0);
+    s.assign(n, 0);
   }
-  void update(int pos, int dif) {
-    for (; (uint32_t)pos < n; pos |= pos + 1)
+  void update(uint32_t pos, int dif) {
+    for (; pos < n; pos |= pos + 1)
       s[pos] += dif;
   }
   int query(int val) {
@@ -36,21 +37,20 @@ struct FenwickTree{
       count += s[val];
     return count;
   }
-  int find(int val){
+  int find(uint32_t val){
     if(val == 0) return 0;
     uint32_t pos = 0;
-    uint32_t bm = internal_size;
-    while(pos < internal_size && bm != 0){
+    uint32_t bm = bitmask;
+    while(pos < n && bm != 0){
       uint32_t tpos = pos | (bm-1);
-      if(s[tpos] < val){
+      if(tpos < n && s[tpos] <= val){
         pos = tpos + 1;
         val -= s[tpos];
       }
       bm >>= 1;
     }
-    if(pos > n) return pos = n;
-    if(val == 0) return pos;
-    else return pos + 1;
+    if(pos >= n) return pos = n-1;
+    else return pos ;
   }
 };
 
@@ -84,7 +84,7 @@ class Frequency{
   public:
     Frequency(): tree(alphabet_size){
       rep(i, 0, alphabet_size){
-        tree.update(i, 2);
+        tree.update(i, 1);
       }
     }
     uint64_t get_total(){
@@ -142,6 +142,7 @@ void compress(fstream &infile, fstream &outfile){
       ++u;
       t = t << 1;
     }
+    F.update_symbol(c);
     if(codeword.second) out.put_codeword(codeword);
   }
   Codeword end = make_codeword(l, 32);
@@ -181,6 +182,7 @@ void decompress(fstream &infile, fstream &outfile){
 
     l = l_old + ((u_old - l_old + 1)*F.get_F(symbol-1))/F.get_total();
     u = l_old + ((u_old - l_old + 1)*F.get_F(symbol))/F.get_total() - 1;
+    F.update_symbol(symbol);
     //cerr << "F(c-1): " << F.get_F(symbol-1) << " F(c): " << F.get_F(symbol) << endl;
     //cerr << bitset<32>(l) << endl << bitset<32>(u) << endl;
 
@@ -204,12 +206,12 @@ void decompress(fstream &infile, fstream &outfile){
 
 int main(int argc, char *argv[]){
 
-  /*FenwickTree t(256);
-  rep(i, 0, 256){
-    t.update(i, 1);
+  /*FenwickTree t(100);
+  rep(i, 0, 100){
+    t.update(i, 2);
   }
-  rep(i, 0, 256){
-    cerr << i << " " << t.query(i) << endl;
+  rep(i, 0, 100){
+    cerr << i << " " << t.find(i) << endl;
   }
   return 0;*/
 
