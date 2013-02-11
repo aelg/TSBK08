@@ -5,9 +5,6 @@
 #include <map>
 #include <inttypes.h>
 #include <cstdlib>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <unistd.h>
 
 #define rep(i, a, b) for(int i = (a); i < int(b); ++i)
 #define trav(it, v) for(typeof((v).begin()) it = (v).begin(); \
@@ -23,8 +20,6 @@ struct FenwickTree{
   vector<uint32_t> s;
   FenwickTree(uint32_t _n) : n(_n), bitmask(1) {
     while((bitmask<<1) < n) bitmask <<= 1;
-    //n = bitmask;
-    //s.assign(bitmask, 0);
     s.assign(n, 0);
   }
   void update(uint32_t pos, int dif) {
@@ -70,7 +65,7 @@ class Outfile{
   public:
     Outfile(fstream &outfile): outfile(outfile), pos(0), buffer(0){};
     void put_codeword(Codeword &codeword){
-      if(codeword.second > 58) cerr << "codeword.put() warning" << endl;
+      if(codeword.second > 58) cerr << "Outfile.put_codeword() warning, large codeword" << endl;
       buffer = (buffer << codeword.second) | codeword.first;
       pos += codeword.second;
       while(pos > 7){
@@ -108,7 +103,7 @@ class Frequency{
     void update_symbol(uint64_t symbol){
       tree.update(symbol, 1);
       if(++size > 1000000000){
-        tree.scale(5);
+        tree.scale(10);
         rep(i, 0, alphabet_size){
           tree.update(i, 1);
         }
@@ -122,36 +117,35 @@ class Frequency{
 
 
 void compress(fstream &infile, fstream &outfile){
+  // Read filesize.
   infile.seekg(0, fstream::end);
   uint32_t size = infile.tellg();
   infile.seekg(0, fstream::beg);
+  // Write filesize to first in file. (Max filesize ~4GB)
   outfile.put(size>>24);
   outfile.put(size>>16);
   outfile.put(size>>8);
   outfile.put(size);
   Outfile out(outfile);
-  //cerr << size << endl;
 
   Frequency F;
   uint32_t l = 0, u = -1;
   uint32_t c = 0;
-  //cerr << hex << u << dec << endl;
   int extra_shifts = 0;
   while(1){
     uint64_t l_old = l, u_old = u, t;
     c = infile.get();
     if(!infile) break;
-    Codeword codeword = make_codeword();
+    
+    // Update u and l with precision magic.
     l = l_old + ((u_old - l_old + 1)*F.get_F(c-1))/F.get_total();
     u = l_old + ((u_old - l_old + 1)*F.get_F(c))/F.get_total() - 1;
-    if(u < l){
-      cerr << "Error: comp u < l symbol: " << (char) c << " n: " << F.get_F(c) - F.get_F(c-1) << " total: " << F.get_total() << endl;
-      cerr << "l   : " << bitset<32>(l) << endl << "u   : " << bitset<32>(u) << endl;
-      cerr << "lold: " << bitset<32>(l_old) << endl << "uold: " << bitset<32>(u_old) << endl;
-    }
-    //cerr << "F(c-1): " << F.get_F(c-1) << " F(c): " << F.get_F(c) << endl;
-    //cerr << c << " : " << (char) c << endl;
-    //cerr << "l: " << hex << l << " u: " << hex << u << endl;
+
+    // Update symbol table.
+    F.update_symbol(c);
+
+    // Shift away to get codes.
+    Codeword codeword = make_codeword();
     t = l ^ u;
     while(!(t >> 31)){
       codeword.first = (codeword.first << 1) + (u >> 31);
@@ -159,8 +153,8 @@ void compress(fstream &infile, fstream &outfile){
       uint32_t outshifted = (~u) >> 31;
       l <<= 1;
       u <<= 1;
-      ++u;
       t <<= 1;
+      ++u;
       ++t;
       if(extra_shifts){
         do{
@@ -178,7 +172,7 @@ void compress(fstream &infile, fstream &outfile){
       l ^= 0x80000000;
       u ^= 0x80000000;
     }
-    F.update_symbol(c);
+
     if(codeword.second) out.put_codeword(codeword);
   }
 
@@ -197,19 +191,18 @@ void compress(fstream &infile, fstream &outfile){
 }
 
 void decompress(fstream &infile, fstream &outfile){
+  // Read length.
   uint32_t size = 0;
   size += infile.get() << 24;
   size += infile.get() << 16;
   size += infile.get() << 8;
   size += infile.get();
-  //cerr << size << endl;
 
   Frequency F;
 
-  uint64_t length = 0;
+  uint32_t length = 0;
   // Init.
-  uint32_t t = 0;
-  uint32_t l = 0, u = (uint32_t)-1;
+  uint32_t t = 0, l = 0, u = -1;
   rep(i, 0, 4){
     int c = infile.get();
     t <<= 8;
@@ -219,31 +212,34 @@ void decompress(fstream &infile, fstream &outfile){
   uint32_t i = 0, c = infile.get();
   while(1){
     if (++length > size) return;
-    //if(length%1000 == 0) cerr << length << " " << size << endl;
-    uint64_t f = (((uint64_t)t-l+1)*F.get_total()-1)/((uint64_t)u-l+1);
 
+    // Calculate F for next symbol
+    uint32_t f = ((t-l+1)*F.get_total()-1)/((uint64_t)u-l+1);
+
+    // Find symbol.
     int symbol = F.get_symbol(f);
     outfile.put(symbol);
-    //cerr << bitset<32>(t) << " : " << f << " : " << symbol << " : " << (char) symbol << endl;
 
     uint64_t l_old = l, u_old = u;
 
+    // Update u and l with precision magic.
     l = l_old + ((u_old - l_old + 1)*F.get_F(symbol-1))/F.get_total();
     u = l_old + ((u_old - l_old + 1)*F.get_F(symbol))/F.get_total() - 1;
-    if(u < l) cerr << "Error: decomp u < l symbol: " << (char)symbol << endl;
+
+    // Update symbol table.
     F.update_symbol(symbol);
-    //cerr << "F(c-1): " << F.get_F(symbol-1) << " F(c): " << F.get_F(symbol) << endl;
-    //cerr << bitset<32>(l) << endl << bitset<32>(u) << endl;
 
     uint32_t tt = l^u;
     while(!(tt >> 31)){
       tt <<= 1;
-      ++tt;
       u <<= 1;
-      ++u;
       l <<= 1;
       t <<= 1;
+      // Shift in 1 in tt and u.
+      ++tt;
+      ++u;
       if((c >> (7-i)) & 1) t += 1;
+      // Update read buffer
       ++i;
       if(i > 7){
         i = 0;
@@ -252,15 +248,15 @@ void decompress(fstream &infile, fstream &outfile){
     }
     // Case 3.
     while((l >> 30) == 1 && (u >> 30) == 2){
-      //cerr << "l   : " << bitset<32>(l >> 30) << endl << "u   : " << bitset<32>(u >> 30) << endl;
+      t <<= 1;
       l <<= 1;
       u <<= 1;
-      ++u;
+      ++u; // Shift in 1 in u
+      if((c >> (7-i)) & 1) ++t; // Read from buffer.
+      t ^= 0x80000000;
       l ^= 0x80000000;
       u ^= 0x80000000;
-      t <<= 1;
-      if((c >> (7-i)) & 1) ++t;
-      t ^= 0x80000000;
+      // Update read buffer.
       ++i;
       if(i > 7){
         i = 0;
@@ -271,16 +267,6 @@ void decompress(fstream &infile, fstream &outfile){
 }
 
 int main(int argc, char *argv[]){
-
-  /*FenwickTree t(100);
-  rep(i, 0, 100){
-    t.update(i, 2);
-  }
-  rep(i, 0, 100){
-    cerr << i << " " << t.find(i) << endl;
-  }
-  return 0;*/
-
 
   if(argc < 2){
     cout << "Wrong input argument, use " << argv[0] << " [-d] infile.\n";

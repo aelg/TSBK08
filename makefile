@@ -17,7 +17,7 @@ huffman_memory : huffman_memory.cc
 	g++ -Wall -Wextra -pedantic -O2 -o huffman_memory huffman_memory.cc
 
 arithmetic : arithmetic.cc
-	g++ -Wall -Wextra -pedantic -O2 -pg -o arithmetic arithmetic.cc
+	g++ -Wall -Wextra -pedantic -O2 -o arithmetic arithmetic.cc
 
 test_huffman :
 	@echo "No memory"
