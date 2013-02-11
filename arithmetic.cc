@@ -79,39 +79,44 @@ class Outfile{
 
 class Frequency{
   private:
-    FenwickTree tree;
-    vector<uint32_t> freq;
-    uint32_t size;
+    vector<FenwickTree> trees;
+    //vector<uint32_t> freq;
+    uint32_t sizes[alphabet_size], last_seen;
   public:
-    Frequency(): tree(alphabet_size), freq(alphabet_size, 1), size(alphabet_size){
+    Frequency(): last_seen(0){
       rep(i, 0, alphabet_size){
-        tree.update(i, 1);
+        sizes[i] = alphabet_size;
+        trees.push_back(FenwickTree(alphabet_size));
+        rep(j, 0, alphabet_size){
+          trees[i].update(j, 1);
+        }
       }
     }
     uint64_t get_total(){
-      return tree.query(alphabet_size-1);
+      return trees[last_seen].query(alphabet_size-1);
     }
-    uint64_t get_symbol_frequency(uint64_t symbol){
+    /*uint64_t get_symbol_frequency(uint64_t symbol){
       return freq[symbol];
       //if(symbol == 0) return tree.query(0);
       //else return tree.query(symbol) - tree.query(symbol-1); // Can be made faster by writing a specialised function for the fenwick tree. Or simply save them.
-    }
+    }*/
     uint64_t get_F(int symbol){
       if(symbol == -1) return 0;
-      return tree.query(symbol);
+      return trees[last_seen].query(symbol);
     }
     void update_symbol(uint64_t symbol){
-      tree.update(symbol, 1);
-      if(++size > 1000000000){
-        tree.scale(10);
+      trees[last_seen].update(symbol, 1);
+      if(++sizes[last_seen] > 1000000000){
+        trees[last_seen].scale(10);
         rep(i, 0, alphabet_size){
-          tree.update(i, 1);
+          trees[last_seen].update(i, 1);
         }
-        size = tree.query(alphabet_size-1);
+        sizes[last_seen] = trees[last_seen].query(alphabet_size-1);
       }
+      last_seen = symbol;
     }
     int get_symbol(uint64_t F){
-      return tree.find(F);
+      return trees[last_seen].find(F);
     }
 };
 
