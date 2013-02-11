@@ -22,7 +22,7 @@ struct FenwickTree{
   uint32_t n, bitmask;
   vector<uint32_t> s;
   FenwickTree(uint32_t _n) : n(_n), bitmask(1) {
-    while(bitmask < n) bitmask <<= 1;
+    while((bitmask<<1) < n) bitmask <<= 1;
     //n = bitmask;
     //s.assign(bitmask, 0);
     s.assign(n, 0);
@@ -52,6 +52,9 @@ struct FenwickTree{
     if(pos >= n) return pos = n-1;
     else return pos ;
   }
+  void scale(uint32_t c){
+    trav(it, s) *it = *it/c;
+  }
 };
 
 
@@ -67,6 +70,7 @@ class Outfile{
   public:
     Outfile(fstream &outfile): outfile(outfile), pos(0), buffer(0){};
     void put_codeword(Codeword &codeword){
+      if(codeword.second > 58) cerr << "codeword.put() warning" << endl;
       buffer = (buffer << codeword.second) | codeword.first;
       pos += codeword.second;
       while(pos > 7){
@@ -81,8 +85,10 @@ class Outfile{
 class Frequency{
   private:
     FenwickTree tree;
+    vector<uint32_t> freq;
+    uint32_t size;
   public:
-    Frequency(): tree(alphabet_size){
+    Frequency(): tree(alphabet_size), freq(alphabet_size, 1), size(alphabet_size){
       rep(i, 0, alphabet_size){
         tree.update(i, 1);
       }
@@ -91,8 +97,9 @@ class Frequency{
       return tree.query(alphabet_size-1);
     }
     uint64_t get_symbol_frequency(uint64_t symbol){
-      if(symbol == 0) return tree.query(0);
-      else return tree.query(symbol) - tree.query(symbol-1); // Can be made faster by writing a specialised function for the fenwick tree.
+      return freq[symbol];
+      //if(symbol == 0) return tree.query(0);
+      //else return tree.query(symbol) - tree.query(symbol-1); // Can be made faster by writing a specialised function for the fenwick tree. Or simply save them.
     }
     uint64_t get_F(int symbol){
       if(symbol == -1) return 0;
@@ -100,6 +107,13 @@ class Frequency{
     }
     void update_symbol(uint64_t symbol){
       tree.update(symbol, 1);
+      if(++size > 1000000000){
+        tree.scale(5);
+        rep(i, 0, alphabet_size){
+          tree.update(i, 1);
+        }
+        size = tree.query(alphabet_size-1);
+      }
     }
     int get_symbol(uint64_t F){
       return tree.find(F);
@@ -119,33 +133,66 @@ void compress(fstream &infile, fstream &outfile){
   //cerr << size << endl;
 
   Frequency F;
-  uint32_t l = 0, u = (uint32_t)-1;
+  uint32_t l = 0, u = -1;
   uint32_t c = 0;
   //cerr << hex << u << dec << endl;
+  int extra_shifts = 0;
   while(1){
     uint64_t l_old = l, u_old = u, t;
-    if(!infile) break;
     c = infile.get();
+    if(!infile) break;
     Codeword codeword = make_codeword();
     l = l_old + ((u_old - l_old + 1)*F.get_F(c-1))/F.get_total();
     u = l_old + ((u_old - l_old + 1)*F.get_F(c))/F.get_total() - 1;
+    if(u < l){
+      cerr << "Error: comp u < l symbol: " << (char) c << " n: " << F.get_F(c) - F.get_F(c-1) << " total: " << F.get_total() << endl;
+      cerr << "l   : " << bitset<32>(l) << endl << "u   : " << bitset<32>(u) << endl;
+      cerr << "lold: " << bitset<32>(l_old) << endl << "uold: " << bitset<32>(u_old) << endl;
+    }
     //cerr << "F(c-1): " << F.get_F(c-1) << " F(c): " << F.get_F(c) << endl;
     //cerr << c << " : " << (char) c << endl;
     //cerr << "l: " << hex << l << " u: " << hex << u << endl;
-    //cerr << bitset<32>(l) << endl << bitset<32>(u) << endl;
     t = l ^ u;
-    for(int i = 1; !(t & uint64_t(1) << 31); ++i){
+    while(!(t >> 31)){
       codeword.first = (codeword.first << 1) + (u >> 31);
-      codeword.second = i;
-      l = l << 1;
-      u = u << 1;
+      ++codeword.second;
+      uint32_t outshifted = (~u) >> 31;
+      l <<= 1;
+      u <<= 1;
       ++u;
-      t = t << 1;
+      t <<= 1;
+      ++t;
+      if(extra_shifts){
+        do{
+          codeword.first = (codeword.first << 1) + outshifted;
+          ++codeword.second;
+        }while(--extra_shifts);
+      }
+    }
+    // Case 3.
+    while(((l >> 30) & 3) == 1 && ((u >> 30) & 3) == 2){
+      ++extra_shifts;
+      l <<= 1;
+      u <<= 1;
+      ++u;
+      l ^= 0x80000000;
+      u ^= 0x80000000;
     }
     F.update_symbol(c);
     if(codeword.second) out.put_codeword(codeword);
   }
-  Codeword end = make_codeword(l, 32);
+
+  // Awkward finishing code.
+  Codeword end = make_codeword(l>>31, 1);
+  uint32_t outshifted = (~l) >> 31;
+  if(extra_shifts){
+    do{
+      end.first = (end.first << 1) + outshifted;
+      ++end.second;
+    }while(--extra_shifts);
+  }
+  end.first = (end.first << 31) | (l&0x7fffffff);
+  end.second += 31;
   out.put_codeword(end);
 }
 
@@ -172,7 +219,8 @@ void decompress(fstream &infile, fstream &outfile){
   uint32_t i = 0, c = infile.get();
   while(1){
     if (++length > size) return;
-    uint64_t f = ((t-l+1)*F.get_total()-1)/((uint64_t)u-l+1);
+    //if(length%1000 == 0) cerr << length << " " << size << endl;
+    uint64_t f = (((uint64_t)t-l+1)*F.get_total()-1)/((uint64_t)u-l+1);
 
     int symbol = F.get_symbol(f);
     outfile.put(symbol);
@@ -182,23 +230,41 @@ void decompress(fstream &infile, fstream &outfile){
 
     l = l_old + ((u_old - l_old + 1)*F.get_F(symbol-1))/F.get_total();
     u = l_old + ((u_old - l_old + 1)*F.get_F(symbol))/F.get_total() - 1;
+    if(u < l) cerr << "Error: decomp u < l symbol: " << (char)symbol << endl;
     F.update_symbol(symbol);
     //cerr << "F(c-1): " << F.get_F(symbol-1) << " F(c): " << F.get_F(symbol) << endl;
     //cerr << bitset<32>(l) << endl << bitset<32>(u) << endl;
 
     uint32_t tt = l^u;
-    while(!(tt & (uint64_t(1) << 31))){
-      tt = tt << 1;
-      u = u << 1;
+    while(!(tt >> 31)){
+      tt <<= 1;
+      ++tt;
+      u <<= 1;
       ++u;
-      l = l << 1;
-      t = t << 1;
+      l <<= 1;
+      t <<= 1;
       if((c >> (7-i)) & 1) t += 1;
       ++i;
       if(i > 7){
         i = 0;
         c = infile.get();
-        //if(c == EOF) c = 0;
+      }
+    }
+    // Case 3.
+    while((l >> 30) == 1 && (u >> 30) == 2){
+      //cerr << "l   : " << bitset<32>(l >> 30) << endl << "u   : " << bitset<32>(u >> 30) << endl;
+      l <<= 1;
+      u <<= 1;
+      ++u;
+      l ^= 0x80000000;
+      u ^= 0x80000000;
+      t <<= 1;
+      if((c >> (7-i)) & 1) ++t;
+      t ^= 0x80000000;
+      ++i;
+      if(i > 7){
+        i = 0;
+        c = infile.get();
       }
     }
   }
