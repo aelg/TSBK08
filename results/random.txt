@@ -1,0 +1,6 @@
+File: /dev/urandom
+ Length: 10000000
+ Memory (k)    Entropy H(Xn,...,Xn+k)  Entropy H(Xn+k|Xn,...Xn+k-1)  Max compression
+ 0             7.99998                 7.99998                       0.999997       
+ 1             15.9953                 7.99529                       0.999411       
+
