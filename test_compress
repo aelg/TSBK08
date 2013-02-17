@@ -1,6 +1,11 @@
 #!/bin/bash
 
-in_dirs=( cantrbry large )
+if $4
+then
+  in_dirs=(cantrbry large other)
+else 
+  in_dirs=($4)
+fi
 #in_dirs=( large )
 
 if [[ $# -lt 3 ]] 
@@ -29,6 +34,10 @@ printf "%-35s%-30s%-20s%-17s%-15s%-15s\n" "File" "Compress and decompress" "Comp
 
 #For timing
 s1=$(date +%s.%N)
+counter=0
+tot_orig_size=0
+tot_comp_size=0
+decomp="SUCCESS"
 
 for dir in ${in_dirs[@]}
 do
@@ -37,6 +46,7 @@ do
   fi
   for i in infiles/$dir/*
   do
+    counter=$counter+1
     file=${i/*\/*\//}
     infile="$i"
     outfile="outfiles/$outdir/$dir/$file"
@@ -56,15 +66,22 @@ do
       result="SUCCESS"
     else 
       result="FAIL"
+      decomp="FAIL"
     fi
     rm $tmpfile
     comp_size=$(stat -c%s "$outfile")
     orig_size=$(stat -c%s "$infile")
+    tot_orig_size=$(($tot_orig_size + $orig_size))
+    tot_comp_size=$(($tot_comp_size + $comp_size))
     ratio=$(echo "scale=3;$comp_size/$orig_size" | bc)
     bps=$(echo "scale=2;$ratio*8/1" | bc)
     printf "%-35s%-30s%-20s%-17s%-15s%-15s\n" $infile $result $ratio $bps $orig_size $comp_size
   done
-done 
+done
+
+ratio=$(echo "scale=3;$tot_comp_size/$tot_orig_size" | bc)
+bps=$(echo "scale=2;$ratio*8/1" | bc)
+printf "\n%-35s%-30s%-20s%-17s%-15s%-15s\n" "Total:" $decomp $ratio $bps $tot_orig_size $tot_comp_size
 
 s2=$(date +%s.%N)
 duration=$(echo "scale=2;($s2-$s1)/1" | bc)
