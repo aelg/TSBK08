@@ -16,8 +16,14 @@ huffman : huffman.cc
 huffman_memory : huffman_memory.cc
 	g++ -Wall -Wextra -pedantic -O2 -o huffman_memory huffman_memory.cc
 
-arithmetic : arithmetic.cc
-	g++ -Wall -Wextra -pedantic -O2 -o arithmetic arithmetic.cc
+frequency.o : frequency.cc frequency.h
+	g++ -Wall -Wextra -pedantic -g -O2 -c -o frequency.o frequency.cc
+
+arithmetic.o : arithmetic.cc frequency.h
+	g++ -Wall -Wextra -pedantic -g -O2 -c -o arithmetic.o arithmetic.cc
+
+arithmetic : arithmetic.o frequency.o
+	g++ -Wall -Wextra -pedantic -g -O2 -o arithmetic arithmetic.o frequency.o
 
 test_huffman :
 	@echo "No memory"
@@ -28,4 +34,4 @@ test_huffman :
 	@./test_compress "./huffman_memory -m 3" "./huffman_memory -m 3 -d" "huffman_memory"
 
 clean : 
-	rm entropy comp huffman huffman_memory base64
+	rm entropy comp huffman huffman_memory base64 arithmetic
