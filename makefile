@@ -17,13 +17,13 @@ huffman_memory : huffman_memory.cc
 	g++ -Wall -Wextra -pedantic -O2 -o huffman_memory huffman_memory.cc
 
 frequency.o : frequency.cc frequency.h
-	g++ -Wall -Wextra -pedantic -g -O2 -c -o frequency.o frequency.cc
+	g++ -Wall -Wextra -pedantic -O2 -c -o frequency.o frequency.cc
 
 arithmetic.o : arithmetic.cc frequency.h
-	g++ -Wall -Wextra -pedantic -g -O2 -c -o arithmetic.o arithmetic.cc
+	g++ -Wall -Wextra -pedantic -O2 -c -o arithmetic.o arithmetic.cc
 
 arithmetic : arithmetic.o frequency.o
-	g++ -Wall -Wextra -pedantic -g -O2 -o arithmetic arithmetic.o frequency.o
+	g++ -Wall -Wextra -pedantic -O2 -o arithmetic arithmetic.o frequency.o
 
 test_huffman :
 	@echo "No memory"

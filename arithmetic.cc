@@ -51,7 +51,9 @@ void compress(fstream &infile, fstream &outfile){
   outfile.put(size);
   Outfile out(outfile);
 
-  ModelPPM F;
+  //ModelFenwick F();
+  ModelPPM F(ModelPPM::PPMD);
+
   uint32_t l = 0, u = -1;
   uint32_t c = 0;
   int extra_shifts = 0;
@@ -126,7 +128,8 @@ void decompress(fstream &infile, fstream &outfile){
   size += infile.get() << 8;
   size += infile.get();
 
-  ModelPPM F(true);
+  //ModelFenwick F();
+  ModelPPM F(ModelPPM::PPMD, true);
 
   uint32_t length = 0;
   // Init.
