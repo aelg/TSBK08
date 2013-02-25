@@ -1,6 +1,6 @@
 #!/bin/bash
 
-if ("$4")
+if [[ -z "$4" ]]
 then
   in_dirs=(cantrbry large other)
 else 

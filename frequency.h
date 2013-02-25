@@ -55,13 +55,14 @@ class ModelPPM : public Model {
     void find_in_context();
     void find_in_no_context();
     void find_context();
+    void update_not_seen_counter(uint32_t no_symbols);
     struct Context;
     struct Symbol{
       uint32_t symbol, count;
       Context *context;
       Symbol *next;
       bool do_not_delete_context;
-      Symbol(uint32_t symbol, Context *context):symbol(symbol), count(1), context(context), next(0), do_not_delete_context(false){
+      Symbol(uint32_t symbol, Context *context):symbol(symbol), count(SEEN_WEIGHT), context(context), next(0), do_not_delete_context(false){
       }
       ~Symbol(){
         if(context && !do_not_delete_context) delete context;
@@ -85,10 +86,10 @@ class ModelPPM : public Model {
           }
         }
       }
-      Context(Context *parent):parent(parent), total(1){
+      Context(Context *parent):parent(parent), total(SEEN_WEIGHT){
         first = new Symbol(NOT_SEEN, 0);
         last = first;
-        first->count = 1;
+        //first->count = 1;
         if(parent) depth = parent->depth+1;
         else depth = 0;
       }
@@ -101,13 +102,13 @@ class ModelPPM : public Model {
           s1 = s2;
         }*/
       }
-    }root, *cur_context, *prev_context;
+    }root, *cur_context;
     std::bitset<257> seen;
     uint32_t l, u, total, s, ppm_type;
-    bool need_new_symbol, found_symbol, need_new_symbol_intern, decoder;
+    bool need_new_symbol, found_symbol, decoder;
     //ModelFenwick no_context;
     stack<Context*> context_stack;
-    static uint32_t const MAX_DEPTH = 5;
+    static uint32_t const MAX_DEPTH = 6, SEEN_WEIGHT = 2;
   public:
     static uint32_t const PPMA = 0, PPMC = 1, PPMD = 2;
     ModelPPM(uint32_t ppm_type, bool decoder = false);

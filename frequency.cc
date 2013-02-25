@@ -62,6 +62,7 @@ uint64_t ModelFenwick::get_u(){
   if((int)symbol == -1) return 0;
   return trees[last_seen].query(symbol);
 }
+
 void ModelFenwick::update(){
   trees[last_seen].update(symbol, 1);
   if(++sizes[last_seen] > 1000000000){
@@ -83,7 +84,7 @@ void ModelFenwick::set_symbol(uint32_t s){
 
 
 // PPM model.
-ModelPPM::ModelPPM(uint32_t ppm_type, bool decoder) : root(0), prev_context(0), l(0), u(1), total(1), ppm_type(ppm_type), need_new_symbol(true), need_new_symbol_intern(false), decoder(decoder){
+ModelPPM::ModelPPM(uint32_t ppm_type, bool decoder) : root(0), l(0), u(1), total(1), ppm_type(ppm_type), need_new_symbol(true), decoder(decoder){
   cur_context = &root;
   cur_symbol = root.first;
 }
@@ -110,6 +111,20 @@ void ModelPPM::find_in_no_context(){
   total = 256 - seen.count();
 }
 
+void ModelPPM::update_not_seen_counter(uint32_t no_symbols){
+  switch(ppm_type){
+    case PPMA:
+      break;
+    case PPMD:
+      cur_context->first->count += 1; // ppmd
+      cur_context->total += 1;
+      break;
+    case PPMC:
+      cur_context->total += no_symbols - cur_context->first->count; // ppmc
+      cur_context->first->count = no_symbols;
+      break;
+  }
+}
 
 void ModelPPM::find_in_context(){
   if(!cur_context){
@@ -138,30 +153,18 @@ void ModelPPM::find_in_context(){
       u = sum + it->count;
       cur_symbol = it;
     }
-    else if(!decoder && it->symbol != NOT_SEEN) seen.set(it->symbol);
+    else if(it->symbol != NOT_SEEN) seen.set(it->symbol);
     sum += it->count;
     it = it->next;
   }
   if(cur_symbol->symbol == NOT_SEEN){ // Not found, use the first which is NOT_SEEN.
     u = cur_context->first->count;
-
-    switch(ppm_type){
-      case PPMA:
-        break;
-      case PPMD:
-        ++cur_context->first->count; // ppmd
-        ++cur_context->total;
-        break;
-      case PPMC:
-        cur_context->total += no_symbols - cur_context->first->count; // ppmc
-        cur_context->first->count = no_symbols;
-        break;
-    }
+    update_not_seen_counter(no_symbols);
   }
   else{
     found_symbol = true;
-    ++cur_symbol->count;
-    ++cur_context->total;
+    cur_symbol->count += SEEN_WEIGHT;
+    cur_context->total += SEEN_WEIGHT;
   }
   total = sum;
 }
@@ -180,15 +183,17 @@ void ModelPPM::find_context(){
   total = cur_context->total;
 }
 
+int ii = 0;
 void ModelPPM::update(){
   if(found_symbol){
-    if(cur_context && cur_symbol->context) cur_context = cur_symbol->context;
+    if(cur_context) cur_context = cur_symbol->context;
+    /*if(cur_context && cur_symbol->context) cur_context = cur_symbol->context;
     else if(cur_context){
       cur_context = cur_context->parent;
       find_context();
       cur_symbol->context = cur_context; // Slight optimization. As we don't need to find the parent context next time.
       cur_symbol->do_not_delete_context = true;
-    }
+    }*/
     while(!context_stack.empty()){
       Context *context = context_stack.top();
       context_stack.pop();
@@ -196,17 +201,31 @@ void ModelPPM::update(){
       if(context->depth < MAX_DEPTH){
         context->last->next = new Symbol(s, new Context(cur_context?cur_context:&root));
         context->last = context->last->next;
-        ++context->total;
+        context->total += SEEN_WEIGHT;
         cur_context = context->last->context;
+        //while(!context_stack.empty()) context_stack.pop();
+        //break;
       }
       else{
         context->last->next = new Symbol(s, 0);
         context->last = context->last->next;
+        context->total += SEEN_WEIGHT;
         cur_context = context->parent;
-        ++context->total;
         find_context();
+        context->last->context = cur_context;
+        context->last->do_not_delete_context = true; // Preventing double deletes in ~Symbol().
       }
     }
+    /*if(++ii > 2000000){
+      delete root.first->next;
+      root.first->next = 0;
+      root.last = root.first;
+      root.first->count = 1;
+      root.total = 1;
+      //root = Context(0);
+      cur_context = &root;
+      ii = 0;
+    }*/
     need_new_symbol = true;
     seen.reset();
     if(!cur_context) total = 256;
@@ -281,24 +300,12 @@ uint32_t ModelPPM::get_symbol(uint64_t F){
   if(cur_symbol->symbol == NOT_SEEN){ // Not found, use the first which is NOT_SEEN.
     u = cur_context->first->count;
     s = NOT_SEEN;
-
-    switch(ppm_type){
-      case PPMA:
-        break;
-      case PPMD:
-        ++cur_context->first->count; // ppmd
-        ++cur_context->total;
-        break;
-      case PPMC:
-        cur_context->total += no_symbols - cur_context->first->count; // ppmc
-        cur_context->first->count = no_symbols;
-        break;
-    }
+    update_not_seen_counter(no_symbols);
   }
   else {
     found_symbol = true;
-    ++cur_symbol->count;
-    ++cur_context->total;
+    cur_symbol->count += SEEN_WEIGHT;
+    cur_context->total += SEEN_WEIGHT;
   }
   total = sum;
   return s;
